@@ -1,0 +1,194 @@
+.data
+	matrix: .space 484	# 11 * 11 * 4
+	core: .space 484
+	result: .space 484	# answer
+	stack: .space 4		# save temp
+	str_space: .asciiz " "
+	str_enter: .asciiz "\n"
+
+# index = ((i*11 + j) * 4)
+.macro getindex(%ans, %i, %j)
+	la	$sp, stack
+	sw	$s0, 0($sp)
+	addi	$sp, $sp, -4
+	
+	li	$s0, 11		# for mult
+	mult	%i, $s0
+	mflo	%ans
+#	li	lo, 0		# safe
+	add	%ans, %ans, %j
+	sll	%ans, %ans, 2	# ans*4
+	
+	addi	$sp, $sp, 4
+	lw	$s0, 0($sp)
+.end_macro
+	
+.text
+	li	$v0, 5
+	syscall
+	move	$s0, $v0	# $s0 = m1
+	li	$v0, 5
+	syscall
+	move	$s1, $v0	# $s1 = n1
+	li	$v0, 5
+	syscall
+	move	$s2, $v0	# $s2 = m2
+	li	$v0, 5
+	syscall
+	move	$s3, $v0	# $s3 = n2
+	
+	li	$t0, 0		# $t0 = i
+for_1_begin:
+	slt	$t4, $t0, $s0	# i < m1
+	beq	$t4, $0, for_1_end
+	nop
+	
+	li	$t1, 0		# $t1 = j
+for_2_begin:
+	slt	$t4, $t1, $s1	# j < n1
+	beq	$t4, $0, for_2_end
+	nop
+	
+	li	$v0, 5
+	syscall
+	getindex($t4, $t0, $t1)
+	sw	$v0, matrix($t4)
+	
+	addi	$t1, $t1, 1	# j++
+	j	for_2_begin
+	nop
+
+for_2_end:
+	addi	$t0, $t0, 1	# i++
+	j	for_1_begin
+	nop
+	
+for_1_end:
+# have got matrix, next : get core
+	li	$t0, 0		# for core
+for_3_begin:
+	slt	$t4, $t0, $s2	# i < m2
+	beq	$t4, $0, for_3_end
+	nop
+	
+	li	$t1, 0		# j = 0
+for_4_begin:
+	slt	$t4, $t1, $s3	# j < n2
+	beq	$t4, $0, for_4_end
+	nop
+	
+	li	$v0, 5
+	syscall
+	getindex($t4, $t0, $t1)
+	sw	$v0, core($t4)
+	
+	addi	$t1, $t1, 1		# j++
+	j	for_4_begin
+	nop
+for_4_end:
+	addi	$t0, $t0, 1		# i++
+	j	for_3_begin
+	nop
+	
+for_3_end:
+# have got core
+	li	$t0, 0			# initialize for process
+	sub	$s4, $s0, $s2		# m1 - m2
+	addi	$s4, $s4, 1		# m1 - m2 + 1
+	sub	$s5, $s1, $s3		# n1 - n2
+	addi	$s5, $s5, 1		# n1 - n2 + 1
+# process
+for_i_begin:
+	slt	$t4, $t0, $s4		# i < m1-m2 + 1
+	beq	$t4, $0, for_i_end
+	nop
+	
+	li	$t1, 0			# j = 0
+for_j_begin:
+	slt	$t4, $t1, $s5		# j < n1-n2 + 1
+	beq	$t4, $0, for_j_end
+	nop
+	
+	li	$t2, 0 			# m = 0
+	li	$s6, 0 			# temp : save value result[i][j]
+for_m_begin:
+	slt	$t4, $t2, $s2		# m < m2
+	beq	$t4, $0, for_m_end
+	nop
+	
+	li	$t3, 0			# n = 0
+for_n_begin:
+	slt	$t4, $t3, $s3		# n < n2
+	beq	$t4, $0, for_n_end
+	nop
+	
+	add	$t5, $t0, $t2		# $t5 = i + m
+	add	$t6, $t1, $t3		# $t6 = j + n
+	
+	getindex($t7, $t5, $t6)
+	lw	$t5, matrix($t7)
+	getindex($t7, $t2, $t3)		# core[m][n]
+	lw	$t6, core($t7)
+	
+	mult	$t5, $t6
+	mflo	$t5
+	
+	add	$s6, $s6, $t5		# ans += matrix[i+m][j+n] * core[m][n]
+	
+	addi	$t3, $t3, 1		# n++
+	j	for_n_begin
+	nop
+for_n_end:
+	addi	$t2, $t2, 1		# m++
+	j	for_m_begin
+	nop
+
+for_m_end:
+	getindex($t5, $t0, $t1)	
+	sw	$s6, result($t5)
+	addi	$t1, $t1, 1		# j++
+	j	for_j_begin
+	nop
+	
+for_j_end:
+	addi	$t0, $t0, 1		# i++
+	j	for_i_begin
+	nop
+
+for_i_end:
+# have save result	next step : print result
+	li	$t0, 0			# initialize for print i = 0
+for_out_1_begin:
+	slt	$t4, $t0, $s4		# m1-m2 + 1
+	beq	$t4, $0, for_out_1_end
+	nop
+
+	li	$t1, 0			# j = 0
+for_out_2_begin:
+	slt	$t4, $t1, $s5		# n1-n2 + 1
+	beq	$t4, $0, for_out_2_end
+	nop
+	
+	getindex($t4, $t0, $t1)
+	lw	$a0, result($t4)
+	li	$v0, 1
+	syscall
+	la	$a0, str_space		# print space
+	li	$v0, 4
+	syscall
+	
+	addi	$t1, $t1, 1		# j++
+	j	for_out_2_begin
+	nop
+	
+for_out_2_end:
+	la	$a0, str_enter		# print enter
+	li	$v0, 4
+	syscall
+	addi	$t0, $t0, 1		# i++
+	j	for_out_1_begin
+	nop
+	
+for_out_1_end:
+	li	$v0, 10
+	syscall
